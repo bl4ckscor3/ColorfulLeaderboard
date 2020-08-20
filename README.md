@@ -1,4 +1,4 @@
-# HighlightMyPoints
+# Colorful Leaderboard
 A Tampermonkey script for EyeWire to colors users in their role's color on EyeWire's leaderboard and adding icons to indicate whether they're a moderator and/or mentor
 
 ## Installation
