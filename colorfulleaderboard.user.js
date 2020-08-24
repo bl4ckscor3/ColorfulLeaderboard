@@ -45,8 +45,7 @@
         const loadedPlayers = new Map();
 
         if(getLocalSetting(Settings.hideLeaderboard, false)) {
-            $("#ovlbContainer").removeClass("onscreen");
-            $("#recall-leaderboard").addClass("onscreen");
+            $("#dismiss-leaderboard").click();
         }
 
         function startObserving() {
