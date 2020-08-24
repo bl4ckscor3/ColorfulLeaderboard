@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.1
+// @version      0.2
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -26,8 +26,8 @@
     const Settings = {
         colorNames: "color-names",
         markModsMentors: "mark-mods-mentors",
-        reorderFlags: "reorder-flags"/*,
-        hideLeaderboard: "hide-leaderboard"*/
+        reorderFlags: "reorder-flags",
+        hideLeaderboard: "hide-leaderboard"
     };
     const checkAccount = setInterval(function() {
         if(typeof account === "undefined" || !account.account.uid) { //is the account accessible yet?
@@ -43,6 +43,11 @@
         const settingsCheck = setInterval(initSettings, 100);
         //key: playername, value: {color, isMod, isMentor}
         const loadedPlayers = new Map();
+
+        if(getLocalSetting(Settings.hideLeaderboard, false)) {
+            $("#ovlbContainer").removeClass("onscreen");
+            $("#recall-leaderboard").addClass("onscreen");
+        }
 
         function startObserving() {
             leaderboardObserver.observe(document.getElementById("leaderboard"), {
@@ -115,11 +120,11 @@
                             color = Colors.scout;
                         }
 
-                        if(roles.includes("moderator") || isAdmin) { //always show the icon for admins
+                        if(roles.includes("moderator") || isAdmin) { //always mark admins as moderators
                             isMod = true;
                         }
 
-                        if(roles.includes("mentor") || isAdmin) { //always show the icon for admins
+                        if(roles.includes("mentor") || isAdmin) { //always mark admins as mentors
                             isMentor = true;
                         }
                     }
@@ -144,13 +149,13 @@
         }
 
         function updatePlayerColor(element, color) {
-            if(getLocalSetting(Settings.colorNames) && leaderboard.competition_id === null) { //do not color names during competitions
+            if(getLocalSetting(Settings.colorNames, true) && leaderboard.competition_id === null) { //do not color names during competitions
                 element.getElementsByTagName("span")[0].style.color = color;
             }
         }
 
         function updatePlayerInfo(element, isMod, isMentor) {
-            if(getLocalSetting(Settings.markModsMentors) && leaderboard.competition_id === null) { //do not style names during competitions
+            if(getLocalSetting(Settings.markModsMentors, true) && leaderboard.competition_id === null) { //do not style names during competitions
                 //mark the name italics and underline for mod/mentor
                 var textStyle = `color: ${element.childNodes[0].style.color};`;
 
@@ -167,7 +172,7 @@
         }
 
         function reorderFlag(element) {
-            if(getLocalSetting(Settings.reorderFlags)) {
+            if(element && getLocalSetting(Settings.reorderFlags, true)) {
                 let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
                 let noLeftMargin = "margin-left: 0px;";
 
@@ -184,22 +189,6 @@
             }
         }
 
-        function setLocalSetting(setting, value) {
-            localStorage.setItem(account.account.uid + "-hmp-" + setting, value);
-        }
-
-        function getLocalSetting(setting) {
-            var storedState = localStorage.getItem(account.account.uid + "-hmp-" + setting);
-
-            if(storedState === null) {
-                setLocalSetting(setting, true);
-                return true;
-            }
-            else {
-                return storedState === 'true';
-            }
-        }
-
         function initSettings() {
             if(!document.getElementById("cubeInspectorFloatingControls")) {
                 return;
@@ -213,15 +202,15 @@
             category.setAttribute("class", "settings-group ews-settings-group invisible");
             category.innerHTML = '<h1>Leaderboard</h1>';
             menu.appendChild(category);
-            addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color");
-            addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors");
-            addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names");
-            //addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default");
+            addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color", true);
+            addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
+            addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names", true);
+            addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
             startObserving();
         }
 
-        function addToggleSetting(category, id, description) {
-            var state = getLocalSetting(id);
+        function addToggleSetting(category, id, description, defaultValue) {
+            var state = getLocalSetting(id, defaultValue);
             var setting = document.createElement("div");
             var checkbox = document.createElement("checkbox");
 
@@ -246,6 +235,22 @@
             };
 
             onSettingChanged(id, state);
+        }
+
+        function setLocalSetting(setting, value) {
+            localStorage.setItem(account.account.uid + "-clb-" + setting, value);
+        }
+
+        function getLocalSetting(setting, defaultValue) {
+            var storedValue = localStorage.getItem(account.account.uid + "-clb-" + setting);
+
+            if(storedValue === null) {
+                setLocalSetting(setting, defaultValue);
+                return defaultValue;
+            }
+            else {
+                return typeof defaultValue === "boolean" ? storedValue === "true" : storedValue;
+            }
         }
 
         function onSettingChanged(id, state) { //trigger the ews-setting-changed event and update the lookup map with the new value
