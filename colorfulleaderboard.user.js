@@ -121,6 +121,7 @@
     function updatePlayer(element, data) {
         updatePlayerColor(element, data.color);
         updatePlayerInfo(element, data.isMod, data.isMentor);
+        reorderFlag(element);
     }
 
     function updatePlayerColor(element, color) {
@@ -144,5 +145,21 @@
 
             element.childNodes[0].style = textStyle;
         }
+    }
+
+    function reorderFlag(element) {
+        let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
+        let noLeftMargin = "margin-left: 0px;";
+
+        if(flagImg) {
+            element.childNodes[1].remove();
+            flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
+        }
+        else{
+            flagImg = document.createElement("span"); //placeholder
+            flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
+        }
+
+        element.prepend(flagImg);
     }
 })();
