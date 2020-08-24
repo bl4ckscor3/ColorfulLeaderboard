@@ -11,7 +11,7 @@
 // @homepageURL  https://github.com/bl4ckscor3/ColorfulLeaderboard
 // ==/UserScript==
 
-/* globals $ leaderboard */
+/* globals $ account leaderboard */
 
 (function() {
     'use strict';
@@ -23,143 +23,233 @@
         mystic: "#ff6666",
         admin: "#ffea49"
     };
-    const leaderboardObserver = new MutationObserver(colorPlayers);
-    //key: playername, value: {color, isMod, isMentor}
-    const loadedPlayers = new Map();
-
-    leaderboardObserver.observe(document.getElementById("leaderboard"), {
-        childList: true,
-        attributes: false,
-        characterData: false,
-        subtree: false
-    });
-
-    function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
-        if(mutations.length === 0) {
-            return;
+    const Settings = {
+        colorNames: "color-names",
+        markModsMentors: "mark-mods-mentors",
+        reorderFlags: "reorder-flags"/*,
+        hideLeaderboard: "hide-leaderboard"*/
+    };
+    const checkAccount = setInterval(function() {
+        if(typeof account === "undefined" || !account.account.uid) { //is the account accessible yet?
+            return; //if not, try again
         }
 
-        //request the leaderboard to get the full names of players (sometimes, names are cut off using ...)
-        let request = leaderboard.country ? `/1.0/stats/top/user/in/country/${leaderboard.country}/by/points/per/` : "/1.0/stats/top/user/by/points/per/";
+        clearInterval(checkAccount); //if yes, stop trying and start the actual script
+        main();
+    }, 100);
 
-        $.getJSON(request + leaderboard.timeframe, function(data) {
-            let mutationsIndex = 0;
+    function main() {
+        const leaderboardObserver = new MutationObserver(colorPlayers);
+        const settingsCheck = setInterval(initSettings, 100);
+        //key: playername, value: {color, isMod, isMentor}
+        const loadedPlayers = new Map();
 
-            for(let i = 0; i < data.length; i++) {
-                if(mutations[mutationsIndex] && mutations[mutationsIndex].addedNodes.length === 0) { //only care about mutations where a node has been added
-                    mutationsIndex++;
-                }
-
-                let indexToUse = mutationsIndex++;
-
-                if(!mutations[indexToUse]) {
-                    continue;
-                }
-
-                processPlayer(data, mutations[indexToUse], data[i].username);
-            }
-        });
-    }
-
-    function processPlayer(data, element, name) {
-        if(!element || element.addedNodes.length === 0) {
-            return;
-        }
-
-        let entry = element.addedNodes[0]; //<div class="leaderRow">...</div>
-        let nameSpan = entry.childNodes[1]; //<span><span>name</span><img ...></span>
-
-        if(loadedPlayers.has(name)) {
-            updatePlayer(nameSpan, loadedPlayers.get(name));
-        }
-        else {
-            $.getJSON(`/1.0/player/${name}/bio`, function(data) {
-                let color = Colors.player;
-                let roles = data.roles;
-                let isMod = false;
-                let isMentor = false;
-
-                if(roles.length !== 0) {
-                    let isAdmin = false;
-
-                    if(roles.includes("admin")) {
-                        color = Colors.admin;
-                        isAdmin = true;
-                    }
-                    else if(roles.includes("mystic")) {
-                        color = Colors.mystic;
-                    }
-                    else if(roles.includes("scythe")) {
-                        color = Colors.scythe;
-                    }
-                    else if(roles.includes("scout")) {
-                        color = Colors.scout;
-                    }
-
-                    if(roles.includes("moderator") || isAdmin) { //always show the icon for admins
-                        isMod = true;
-                    }
-
-                    if(roles.includes("mentor") || isAdmin) { //always show the icon for admins
-                        isMentor = true;
-                    }
-                }
-
-                saveAndUpdatePlayer(nameSpan, name, {color: color, isMod: isMod, isMentor: isMentor});
-            }).fail(function() {
-                console.warn(`Failed to color ${name} in the leaderboard, falling back to default player color.`);
-                saveAndUpdatePlayer(nameSpan, name, {color: Colors.player, isMod: false, isMentor: false});
+        function startObserving() {
+            leaderboardObserver.observe(document.getElementById("leaderboard"), {
+                childList: true,
+                attributes: false,
+                characterData: false,
+                subtree: false
             });
         }
-    }
 
-    function saveAndUpdatePlayer(element, playerName, data) {
-        updatePlayer(element, data);
-        loadedPlayers.set(playerName, data);
-    }
-
-    function updatePlayer(element, data) {
-        updatePlayerColor(element, data.color);
-        updatePlayerInfo(element, data.isMod, data.isMentor);
-        reorderFlag(element);
-    }
-
-    function updatePlayerColor(element, color) {
-        if(leaderboard.competition_id === null) { //do not color names during competitions
-            element.getElementsByTagName("span")[0].style.color = color;
-        }
-    }
-
-    function updatePlayerInfo(element, isMod, isMentor) {
-        if(leaderboard.competition_id === null) { //do not style names during competitions
-            //mark the name italics and underline for mod/mentor
-            var textStyle = `color: ${element.childNodes[0].style.color};`;
-
-            if(isMod) {
-                textStyle += "font-style: italic;";
+        function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
+            if(mutations.length === 0) {
+                return;
             }
 
-            if(isMentor) {
-                textStyle += "text-decoration: underline;";
+            //request the leaderboard to get the full names of players (sometimes, names are cut off using ...)
+            let request = leaderboard.country ? `/1.0/stats/top/user/in/country/${leaderboard.country}/by/points/per/` : "/1.0/stats/top/user/by/points/per/";
+
+            $.getJSON(request + leaderboard.timeframe, function(data) {
+                let mutationsIndex = 0;
+
+                for(let i = 0; i < data.length; i++) {
+                    if(mutations[mutationsIndex] && mutations[mutationsIndex].addedNodes.length === 0) { //only care about mutations where a node has been added
+                        mutationsIndex++;
+                    }
+
+                    let indexToUse = mutationsIndex++;
+
+                    if(!mutations[indexToUse]) {
+                        continue;
+                    }
+
+                    processPlayer(data, mutations[indexToUse], data[i].username);
+                }
+            });
+        }
+
+        function processPlayer(data, element, name) {
+            if(!element || element.addedNodes.length === 0) {
+                return;
             }
 
-            element.childNodes[0].style = textStyle;
-        }
-    }
+            let entry = element.addedNodes[0]; //<div class="leaderRow">...</div>
+            let nameSpan = entry.childNodes[1]; //<span><span>name</span><img ...></span>
 
-    function reorderFlag(element) {
-        let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
-        let noLeftMargin = "margin-left: 0px;";
+            if(loadedPlayers.has(name)) {
+                updatePlayer(nameSpan, loadedPlayers.get(name));
+            }
+            else {
+                $.getJSON(`/1.0/player/${name}/bio`, function(data) {
+                    let color = Colors.player;
+                    let roles = data.roles;
+                    let isMod = false;
+                    let isMentor = false;
 
-        if(flagImg) {
-            element.childNodes[1].remove();
-            flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
-        }
-        else{
-            flagImg = document.createElement("span"); //placeholder
-            flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
+                    if(roles.length !== 0) {
+                        let isAdmin = false;
+
+                        if(roles.includes("admin")) {
+                            color = Colors.admin;
+                            isAdmin = true;
+                        }
+                        else if(roles.includes("mystic")) {
+                            color = Colors.mystic;
+                        }
+                        else if(roles.includes("scythe")) {
+                            color = Colors.scythe;
+                        }
+                        else if(roles.includes("scout")) {
+                            color = Colors.scout;
+                        }
+
+                        if(roles.includes("moderator") || isAdmin) { //always show the icon for admins
+                            isMod = true;
+                        }
+
+                        if(roles.includes("mentor") || isAdmin) { //always show the icon for admins
+                            isMentor = true;
+                        }
+                    }
+
+                    saveAndUpdatePlayer(nameSpan, name, {color: color, isMod: isMod, isMentor: isMentor});
+                }).fail(function() {
+                    console.warn(`Failed to color ${name} in the leaderboard, falling back to default player color.`);
+                    saveAndUpdatePlayer(nameSpan, name, {color: Colors.player, isMod: false, isMentor: false});
+                });
+            }
         }
 
-        element.prepend(flagImg);
+        function saveAndUpdatePlayer(element, playerName, data) {
+            updatePlayer(element, data);
+            loadedPlayers.set(playerName, data);
+        }
+
+        function updatePlayer(element, data) {
+            updatePlayerColor(element, data.color);
+            updatePlayerInfo(element, data.isMod, data.isMentor);
+            reorderFlag(element);
+        }
+
+        function updatePlayerColor(element, color) {
+            if(getLocalSetting(Settings.colorNames) && leaderboard.competition_id === null) { //do not color names during competitions
+                element.getElementsByTagName("span")[0].style.color = color;
+            }
+        }
+
+        function updatePlayerInfo(element, isMod, isMentor) {
+            if(getLocalSetting(Settings.markModsMentors) && leaderboard.competition_id === null) { //do not style names during competitions
+                //mark the name italics and underline for mod/mentor
+                var textStyle = `color: ${element.childNodes[0].style.color};`;
+
+                if(isMod) {
+                    textStyle += "font-style: italic;";
+                }
+
+                if(isMentor) {
+                    textStyle += "text-decoration: underline;";
+                }
+
+                element.childNodes[0].style = textStyle;
+            }
+        }
+
+        function reorderFlag(element) {
+            if(getLocalSetting(Settings.reorderFlags)) {
+                let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
+                let noLeftMargin = "margin-left: 0px;";
+
+                if(flagImg) {
+                    element.childNodes[1].remove();
+                    flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
+                }
+                else{
+                    flagImg = document.createElement("span"); //placeholder
+                    flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
+                }
+
+                element.prepend(flagImg);
+            }
+        }
+
+        function setLocalSetting(setting, value) {
+            localStorage.setItem(account.account.uid + "-hmp-" + setting, value);
+        }
+
+        function getLocalSetting(setting) {
+            var storedState = localStorage.getItem(account.account.uid + "-hmp-" + setting);
+
+            if(storedState === null) {
+                setLocalSetting(setting, true);
+                return true;
+            }
+            else {
+                return storedState === 'true';
+            }
+        }
+
+        function initSettings() {
+            if(!document.getElementById("cubeInspectorFloatingControls")) {
+                return;
+            }
+
+            clearInterval(settingsCheck);
+
+            var menu = document.getElementById("settingsMenu");
+            var category = document.createElement("div");
+
+            category.setAttribute("class", "settings-group ews-settings-group invisible");
+            category.innerHTML = '<h1>Leaderboard</h1>';
+            menu.appendChild(category);
+            addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color");
+            addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors");
+            addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names");
+            //addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default");
+            startObserving();
+        }
+
+        function addToggleSetting(category, id, description) {
+            var state = getLocalSetting(id);
+            var setting = document.createElement("div");
+            var checkbox = document.createElement("checkbox");
+
+            setting.setAttribute("class", "setting");
+            setting.innerHTML = `<span>${description}</span>`;
+            checkbox.setAttribute("class", `checkbox ${state ? "on" : "off"}`);
+            checkbox.innerHTML = `
+                <div class="checkbox-handle"></div>
+                <input type="checkbox" id="hmp-${id}" checked="${state ? "checked" : ""}" style="display: none;">`;
+            setting.appendChild(checkbox);
+            category.appendChild(setting);
+
+            setting.onclick = function(e) {
+                var toggle = setting.getElementsByTagName("input")[0];
+                var newState = !toggle.checked;
+
+                e.stopPropagation();
+                setLocalSetting(id, newState);
+                toggle.checked = newState;
+                checkbox.setAttribute("class", `checkbox ${newState ? "on" : "off"}`);
+                onSettingChanged(id, newState);
+            };
+
+            onSettingChanged(id, state);
+        }
+
+        function onSettingChanged(id, state) { //trigger the ews-setting-changed event and update the lookup map with the new value
+            $(document).trigger('ews-setting-changed', {setting: id, state: state});
+        }
     }
 })();
