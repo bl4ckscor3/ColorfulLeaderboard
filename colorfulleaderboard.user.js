@@ -202,8 +202,12 @@
             let mod = document.createElement("div");
             let mentor = document.createElement("div");
             let modMentor = document.createElement("div");
+            let helpStyle = document.createElement("style");
 
-            document.head.innerHTML += `<style type="text/css">#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px}</style>`;
+            helpStyle.id = "leaderboard-help-style";
+            helpStyle.type = "text/css"
+            helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 3}";
+            document.head.appendChild(helpStyle);
 
             container.id = "helpContainer";
             container.setAttribute("style", "margin: 10px; font-size: 13px");
@@ -221,8 +225,8 @@
             helpPanel.id = "helpPanel";
             helpPanel.style.position = "absolute";
             helpPanel.style.right = "-1000px";
-            helpPanel.style.width = "300px";
-            helpPanel.style.height = "200px";
+            helpPanel.style.width = "175px";
+            helpPanel.style.height = "175px";
 
             helpIcon.onmouseenter = function() {
                 helpPanel.style.right = "0px";
