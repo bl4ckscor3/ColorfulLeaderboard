@@ -218,7 +218,7 @@
             checkbox.setAttribute("class", `checkbox ${state ? "on" : "off"}`);
             checkbox.innerHTML = `
                 <div class="checkbox-handle"></div>
-                <input type="checkbox" id="hmp-${id}" checked="${state ? "checked" : ""}" style="display: none;">`;
+                <input type="checkbox" id="clb-${id}" checked="${state ? "checked" : ""}" style="display: none;">`;
             setting.appendChild(checkbox);
             category.appendChild(setting);
 
