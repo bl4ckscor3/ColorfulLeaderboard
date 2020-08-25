@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3
+// @version      0.3.1
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -206,7 +206,7 @@
 
             helpStyle.id = "leaderboard-help-style";
             helpStyle.type = "text/css"
-            helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 3}";
+            helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 30000;}";
             document.head.appendChild(helpStyle);
 
             container.id = "helpContainer";
