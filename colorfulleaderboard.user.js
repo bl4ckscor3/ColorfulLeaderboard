@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.2
+// @version      0.3
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -47,6 +47,8 @@
         if(getLocalSetting(Settings.hideLeaderboard, false)) {
             $("#dismiss-leaderboard").click();
         }
+
+        setupHelp();
 
         function startObserving() {
             leaderboardObserver.observe(document.getElementById("leaderboard"), {
@@ -186,6 +188,61 @@
 
                 element.prepend(flagImg);
             }
+        }
+
+        function setupHelp() {
+            let helpIcon = document.createElement("div");
+            let helpPanel = document.createElement("div");
+            let container = document.createElement("div");
+            let player = document.createElement("div");
+            let scout = document.createElement("div");
+            let scythe = document.createElement("div");
+            let mystic = document.createElement("div");
+            let admin = document.createElement("div");
+            let mod = document.createElement("div");
+            let mentor = document.createElement("div");
+            let modMentor = document.createElement("div");
+
+            document.head.innerHTML += `<style type="text/css">#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px}</style>`;
+
+            container.id = "helpContainer";
+            container.setAttribute("style", "margin: 10px; font-size: 13px");
+            player.innerHTML = `<span style="color: ${Colors.player};">(Advanced) Player</span>`;
+            scout.innerHTML = `<span style="color: ${Colors.scout};">Scout</span>`;
+            scythe.innerHTML = `<span style="color: ${Colors.scythe};">Scythe</span>`;
+            mystic.innerHTML = `<span style="color: ${Colors.mystic};">Mystic</span>`;
+            admin.innerHTML = `<span style="color: ${Colors.admin};">Admin</span>`;
+            mod.innerHTML = `<span style="color: #e4e1e1; font-style: italic;">Moderator</span>`;
+            mentor.innerHTML = `<span style="color: #e4e1e1; text-decoration: underline;">Mentor</span>`;
+            modMentor.innerHTML = `<span style="color: #e4e1e1; font-style: italic; text-decoration: underline;">Moderator & Mentor</span>`;
+
+            helpIcon.id = "leaderboard-help";
+            helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 2;");
+            helpPanel.id = "helpPanel";
+            helpPanel.style.position = "absolute";
+            helpPanel.style.right = "-1000px";
+            helpPanel.style.width = "300px";
+            helpPanel.style.height = "200px";
+
+            helpIcon.onmouseenter = function() {
+                helpPanel.style.right = "0px";
+            };
+
+            helpPanel.onmouseleave = function() {
+                helpPanel.style.right = "-1000px";
+            };
+
+            container.appendChild(player);
+            container.appendChild(scout);
+            container.appendChild(scythe);
+            container.appendChild(mystic);
+            container.appendChild(admin);
+            container.appendChild(mod);
+            container.appendChild(mentor);
+            container.appendChild(modMentor);
+            helpPanel.appendChild(container);
+            helpIcon.appendChild(helpPanel);
+            document.getElementById("ovlbContainer").prepend(helpIcon);
         }
 
         function initSettings() {
