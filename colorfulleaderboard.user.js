@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3.1
+// @version      0.3.2
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -49,15 +49,12 @@
         }
 
         setupHelp();
-
-        function startObserving() {
-            leaderboardObserver.observe(document.getElementById("leaderboard"), {
-                childList: true,
-                attributes: false,
-                characterData: false,
-                subtree: false
-            });
-        }
+        leaderboardObserver.observe(document.getElementById("leaderboard"), {
+            childList: true,
+            attributes: false,
+            characterData: false,
+            subtree: false
+        });
 
         function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
             if(mutations.length === 0) {
@@ -266,7 +263,6 @@
             addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
             addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names", true);
             addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
-            startObserving();
         }
 
         function addToggleSetting(category, id, description, defaultValue) {
