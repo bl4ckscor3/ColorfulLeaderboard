@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3.2
+// @version      0.3.3
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -37,280 +37,281 @@
         clearInterval(checkAccount); //if yes, stop trying and start the actual script
         main();
     }, 100);
+    const settingsCheck = setInterval(initSettings, 100);
+    //key: playername, value: {color, isMod, isMentor}
+    const loadedPlayers = new Map();
+    const leaderboardObserver = new MutationObserver(colorPlayers);
+
+    leaderboardObserver.observe(document.getElementById("leaderboard"), {
+        childList: true,
+        attributes: false,
+        characterData: false,
+        subtree: false
+    });
 
     function main() {
-        const leaderboardObserver = new MutationObserver(colorPlayers);
-        const settingsCheck = setInterval(initSettings, 100);
-        //key: playername, value: {color, isMod, isMentor}
-        const loadedPlayers = new Map();
 
         if(getLocalSetting(Settings.hideLeaderboard, false)) {
             $("#dismiss-leaderboard").click();
         }
 
         setupHelp();
-        leaderboardObserver.observe(document.getElementById("leaderboard"), {
-            childList: true,
-            attributes: false,
-            characterData: false,
-            subtree: false
-        });
+    }
 
-        function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
-            if(mutations.length === 0) {
-                return;
-            }
+    function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
+        if(mutations.length === 0) {
+            return;
+        }
 
-            //request the leaderboard to get the full names of players (sometimes, names are cut off using ...)
-            let request = leaderboard.country ? `/1.0/stats/top/user/in/country/${leaderboard.country}/by/points/per/` : "/1.0/stats/top/user/by/points/per/";
+        //request the leaderboard to get the full names of players (sometimes, names are cut off using ...)
+        let request = leaderboard.country ? `/1.0/stats/top/user/in/country/${leaderboard.country}/by/points/per/` : "/1.0/stats/top/user/by/points/per/";
 
-            $.getJSON(request + leaderboard.timeframe, function(data) {
-                let mutationsIndex = 0;
+        $.getJSON(request + leaderboard.timeframe, function(data) {
+            let mutationsIndex = 0;
 
-                for(let i = 0; i < data.length; i++) {
-                    if(mutations[mutationsIndex] && mutations[mutationsIndex].addedNodes.length === 0) { //only care about mutations where a node has been added
-                        mutationsIndex++;
-                    }
-
-                    let indexToUse = mutationsIndex++;
-
-                    if(!mutations[indexToUse]) {
-                        continue;
-                    }
-
-                    processPlayer(data, mutations[indexToUse], data[i].username);
+            for(let i = 0; i < data.length; i++) {
+                if(mutations[mutationsIndex] && mutations[mutationsIndex].addedNodes.length === 0) { //only care about mutations where a node has been added
+                    mutationsIndex++;
                 }
+
+                let indexToUse = mutationsIndex++;
+
+                if(!mutations[indexToUse]) {
+                    continue;
+                }
+
+                processPlayer(data, mutations[indexToUse], data[i].username);
+            }
+        });
+    }
+
+    function processPlayer(data, element, name) {
+        if(!element || element.addedNodes.length === 0) {
+            return;
+        }
+
+        let entry = element.addedNodes[0]; //<div class="leaderRow">...</div>
+        let nameSpan = entry.childNodes[1]; //<span><span>name</span><img ...></span>
+
+        if(loadedPlayers.has(name)) {
+            updatePlayer(nameSpan, loadedPlayers.get(name));
+        }
+        else {
+            $.getJSON(`/1.0/player/${name}/bio`, function(data) {
+                let color = Colors.player;
+                let roles = data.roles;
+                let isMod = false;
+                let isMentor = false;
+
+                if(roles.length !== 0) {
+                    let isAdmin = false;
+
+                    if(roles.includes("admin")) {
+                        color = Colors.admin;
+                        isAdmin = true;
+                    }
+                    else if(roles.includes("mystic")) {
+                        color = Colors.mystic;
+                    }
+                    else if(roles.includes("scythe")) {
+                        color = Colors.scythe;
+                    }
+                    else if(roles.includes("scout")) {
+                        color = Colors.scout;
+                    }
+
+                    if(roles.includes("moderator") || isAdmin) { //always mark admins as moderators
+                        isMod = true;
+                    }
+
+                    if(roles.includes("mentor") || isAdmin) { //always mark admins as mentors
+                        isMentor = true;
+                    }
+                }
+
+                saveAndUpdatePlayer(nameSpan, name, {color: color, isMod: isMod, isMentor: isMentor});
+            }).fail(function() {
+                console.warn(`Failed to color ${name} in the leaderboard, falling back to default player color.`);
+                saveAndUpdatePlayer(nameSpan, name, {color: Colors.player, isMod: false, isMentor: false});
             });
         }
+    }
 
-        function processPlayer(data, element, name) {
-            if(!element || element.addedNodes.length === 0) {
-                return;
+    function saveAndUpdatePlayer(element, playerName, data) {
+        updatePlayer(element, data);
+        loadedPlayers.set(playerName, data);
+    }
+
+    function updatePlayer(element, data) {
+        updatePlayerColor(element, data.color);
+        updatePlayerInfo(element, data.isMod, data.isMentor);
+        reorderFlag(element);
+    }
+
+    function updatePlayerColor(element, color) {
+        if(getLocalSetting(Settings.colorNames, true) && leaderboard.competition_id === null) { //do not color names during competitions
+            element.getElementsByTagName("span")[0].style.color = color;
+        }
+    }
+
+    function updatePlayerInfo(element, isMod, isMentor) {
+        if(getLocalSetting(Settings.markModsMentors, true) && leaderboard.competition_id === null) { //do not style names during competitions
+            //mark the name italics and underline for mod/mentor
+            var textStyle = `color: ${element.childNodes[0].style.color};`;
+
+            if(isMod) {
+                textStyle += "font-style: italic;";
             }
 
-            let entry = element.addedNodes[0]; //<div class="leaderRow">...</div>
-            let nameSpan = entry.childNodes[1]; //<span><span>name</span><img ...></span>
-
-            if(loadedPlayers.has(name)) {
-                updatePlayer(nameSpan, loadedPlayers.get(name));
+            if(isMentor) {
+                textStyle += "text-decoration: underline;";
             }
-            else {
-                $.getJSON(`/1.0/player/${name}/bio`, function(data) {
-                    let color = Colors.player;
-                    let roles = data.roles;
-                    let isMod = false;
-                    let isMentor = false;
 
-                    if(roles.length !== 0) {
-                        let isAdmin = false;
+            element.childNodes[0].style = textStyle;
+        }
+    }
 
-                        if(roles.includes("admin")) {
-                            color = Colors.admin;
-                            isAdmin = true;
-                        }
-                        else if(roles.includes("mystic")) {
-                            color = Colors.mystic;
-                        }
-                        else if(roles.includes("scythe")) {
-                            color = Colors.scythe;
-                        }
-                        else if(roles.includes("scout")) {
-                            color = Colors.scout;
-                        }
+    function reorderFlag(element) {
+        if(element && getLocalSetting(Settings.reorderFlags, true)) {
+            let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
+            let noLeftMargin = "margin-left: 0px;";
 
-                        if(roles.includes("moderator") || isAdmin) { //always mark admins as moderators
-                            isMod = true;
-                        }
-
-                        if(roles.includes("mentor") || isAdmin) { //always mark admins as mentors
-                            isMentor = true;
-                        }
-                    }
-
-                    saveAndUpdatePlayer(nameSpan, name, {color: color, isMod: isMod, isMentor: isMentor});
-                }).fail(function() {
-                    console.warn(`Failed to color ${name} in the leaderboard, falling back to default player color.`);
-                    saveAndUpdatePlayer(nameSpan, name, {color: Colors.player, isMod: false, isMentor: false});
-                });
+            if(flagImg) {
+                element.childNodes[1].remove();
+                flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
             }
-        }
-
-        function saveAndUpdatePlayer(element, playerName, data) {
-            updatePlayer(element, data);
-            loadedPlayers.set(playerName, data);
-        }
-
-        function updatePlayer(element, data) {
-            updatePlayerColor(element, data.color);
-            updatePlayerInfo(element, data.isMod, data.isMentor);
-            reorderFlag(element);
-        }
-
-        function updatePlayerColor(element, color) {
-            if(getLocalSetting(Settings.colorNames, true) && leaderboard.competition_id === null) { //do not color names during competitions
-                element.getElementsByTagName("span")[0].style.color = color;
+            else{
+                flagImg = document.createElement("span"); //placeholder
+                flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
             }
+
+            element.prepend(flagImg);
         }
+    }
 
-        function updatePlayerInfo(element, isMod, isMentor) {
-            if(getLocalSetting(Settings.markModsMentors, true) && leaderboard.competition_id === null) { //do not style names during competitions
-                //mark the name italics and underline for mod/mentor
-                var textStyle = `color: ${element.childNodes[0].style.color};`;
+    function setupHelp() {
+        let helpIcon = document.createElement("div");
+        let helpPanel = document.createElement("div");
+        let container = document.createElement("div");
+        let player = document.createElement("div");
+        let scout = document.createElement("div");
+        let scythe = document.createElement("div");
+        let mystic = document.createElement("div");
+        let admin = document.createElement("div");
+        let mod = document.createElement("div");
+        let mentor = document.createElement("div");
+        let modMentor = document.createElement("div");
+        let helpStyle = document.createElement("style");
 
-                if(isMod) {
-                    textStyle += "font-style: italic;";
-                }
+        helpStyle.id = "leaderboard-help-style";
+        helpStyle.type = "text/css"
+        helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 30000;}";
+        document.head.appendChild(helpStyle);
 
-                if(isMentor) {
-                    textStyle += "text-decoration: underline;";
-                }
+        container.id = "helpContainer";
+        container.setAttribute("style", "margin: 10px; font-size: 13px");
+        player.innerHTML = `<span style="color: ${Colors.player};">(Advanced) Player</span>`;
+        scout.innerHTML = `<span style="color: ${Colors.scout};">Scout</span>`;
+        scythe.innerHTML = `<span style="color: ${Colors.scythe};">Scythe</span>`;
+        mystic.innerHTML = `<span style="color: ${Colors.mystic};">Mystic</span>`;
+        admin.innerHTML = `<span style="color: ${Colors.admin};">Admin</span>`;
+        mod.innerHTML = `<span style="color: #e4e1e1; font-style: italic;">Moderator</span>`;
+        mentor.innerHTML = `<span style="color: #e4e1e1; text-decoration: underline;">Mentor</span>`;
+        modMentor.innerHTML = `<span style="color: #e4e1e1; font-style: italic; text-decoration: underline;">Moderator & Mentor</span>`;
 
-                element.childNodes[0].style = textStyle;
-            }
-        }
+        helpIcon.id = "leaderboard-help";
+        helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 2;");
+        helpPanel.id = "helpPanel";
+        helpPanel.style.position = "absolute";
+        helpPanel.style.right = "-1000px";
+        helpPanel.style.width = "175px";
+        helpPanel.style.height = "175px";
 
-        function reorderFlag(element) {
-            if(element && getLocalSetting(Settings.reorderFlags, true)) {
-                let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
-                let noLeftMargin = "margin-left: 0px;";
+        helpIcon.onmouseenter = function() {
+            helpPanel.style.right = "0px";
+        };
 
-                if(flagImg) {
-                    element.childNodes[1].remove();
-                    flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
-                }
-                else{
-                    flagImg = document.createElement("span"); //placeholder
-                    flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
-                }
-
-                element.prepend(flagImg);
-            }
-        }
-
-        function setupHelp() {
-            let helpIcon = document.createElement("div");
-            let helpPanel = document.createElement("div");
-            let container = document.createElement("div");
-            let player = document.createElement("div");
-            let scout = document.createElement("div");
-            let scythe = document.createElement("div");
-            let mystic = document.createElement("div");
-            let admin = document.createElement("div");
-            let mod = document.createElement("div");
-            let mentor = document.createElement("div");
-            let modMentor = document.createElement("div");
-            let helpStyle = document.createElement("style");
-
-            helpStyle.id = "leaderboard-help-style";
-            helpStyle.type = "text/css"
-            helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 30000;}";
-            document.head.appendChild(helpStyle);
-
-            container.id = "helpContainer";
-            container.setAttribute("style", "margin: 10px; font-size: 13px");
-            player.innerHTML = `<span style="color: ${Colors.player};">(Advanced) Player</span>`;
-            scout.innerHTML = `<span style="color: ${Colors.scout};">Scout</span>`;
-            scythe.innerHTML = `<span style="color: ${Colors.scythe};">Scythe</span>`;
-            mystic.innerHTML = `<span style="color: ${Colors.mystic};">Mystic</span>`;
-            admin.innerHTML = `<span style="color: ${Colors.admin};">Admin</span>`;
-            mod.innerHTML = `<span style="color: #e4e1e1; font-style: italic;">Moderator</span>`;
-            mentor.innerHTML = `<span style="color: #e4e1e1; text-decoration: underline;">Mentor</span>`;
-            modMentor.innerHTML = `<span style="color: #e4e1e1; font-style: italic; text-decoration: underline;">Moderator & Mentor</span>`;
-
-            helpIcon.id = "leaderboard-help";
-            helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 2;");
-            helpPanel.id = "helpPanel";
-            helpPanel.style.position = "absolute";
+        helpPanel.onmouseleave = function() {
             helpPanel.style.right = "-1000px";
-            helpPanel.style.width = "175px";
-            helpPanel.style.height = "175px";
+        };
 
-            helpIcon.onmouseenter = function() {
-                helpPanel.style.right = "0px";
-            };
+        container.appendChild(player);
+        container.appendChild(scout);
+        container.appendChild(scythe);
+        container.appendChild(mystic);
+        container.appendChild(admin);
+        container.appendChild(mod);
+        container.appendChild(mentor);
+        container.appendChild(modMentor);
+        helpPanel.appendChild(container);
+        helpIcon.appendChild(helpPanel);
+        document.getElementById("ovlbContainer").prepend(helpIcon);
+    }
 
-            helpPanel.onmouseleave = function() {
-                helpPanel.style.right = "-1000px";
-            };
-
-            container.appendChild(player);
-            container.appendChild(scout);
-            container.appendChild(scythe);
-            container.appendChild(mystic);
-            container.appendChild(admin);
-            container.appendChild(mod);
-            container.appendChild(mentor);
-            container.appendChild(modMentor);
-            helpPanel.appendChild(container);
-            helpIcon.appendChild(helpPanel);
-            document.getElementById("ovlbContainer").prepend(helpIcon);
+    function initSettings() {
+        if(!document.getElementById("cubeInspectorFloatingControls")) {
+            return;
         }
 
-        function initSettings() {
-            if(!document.getElementById("cubeInspectorFloatingControls")) {
-                return;
-            }
+        clearInterval(settingsCheck);
 
-            clearInterval(settingsCheck);
+        var menu = document.getElementById("settingsMenu");
+        var category = document.createElement("div");
 
-            var menu = document.getElementById("settingsMenu");
-            var category = document.createElement("div");
+        category.setAttribute("class", "settings-group ews-settings-group invisible");
+        category.innerHTML = '<h1>Leaderboard</h1>';
+        menu.appendChild(category);
+        addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color", true);
+        addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
+        addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names", true);
+        addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
+    }
 
-            category.setAttribute("class", "settings-group ews-settings-group invisible");
-            category.innerHTML = '<h1>Leaderboard</h1>';
-            menu.appendChild(category);
-            addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color", true);
-            addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
-            addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names", true);
-            addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
+    function addToggleSetting(category, id, description, defaultValue) {
+        var state = getLocalSetting(id, defaultValue);
+        var setting = document.createElement("div");
+        var checkbox = document.createElement("checkbox");
+
+        setting.setAttribute("class", "setting");
+        setting.innerHTML = `<span>${description}</span>`;
+        checkbox.setAttribute("class", `checkbox ${state ? "on" : "off"}`);
+        checkbox.innerHTML = `
+            <div class="checkbox-handle"></div>
+            <input type="checkbox" id="clb-${id}" checked="${state ? "checked" : ""}" style="display: none;">`;
+        setting.appendChild(checkbox);
+        category.appendChild(setting);
+
+        setting.onclick = function(e) {
+            var toggle = setting.getElementsByTagName("input")[0];
+            var newState = !toggle.checked;
+
+            e.stopPropagation();
+            setLocalSetting(id, newState);
+            toggle.checked = newState;
+            checkbox.setAttribute("class", `checkbox ${newState ? "on" : "off"}`);
+            onSettingChanged(id, newState);
+        };
+
+        onSettingChanged(id, state);
+    }
+
+    function setLocalSetting(setting, value) {
+        localStorage.setItem(account.account.uid + "-clb-" + setting, value);
+    }
+
+    function getLocalSetting(setting, defaultValue) {
+        var storedValue = localStorage.getItem(account.account.uid + "-clb-" + setting);
+
+        if(storedValue === null) {
+            setLocalSetting(setting, defaultValue);
+            return defaultValue;
         }
-
-        function addToggleSetting(category, id, description, defaultValue) {
-            var state = getLocalSetting(id, defaultValue);
-            var setting = document.createElement("div");
-            var checkbox = document.createElement("checkbox");
-
-            setting.setAttribute("class", "setting");
-            setting.innerHTML = `<span>${description}</span>`;
-            checkbox.setAttribute("class", `checkbox ${state ? "on" : "off"}`);
-            checkbox.innerHTML = `
-                <div class="checkbox-handle"></div>
-                <input type="checkbox" id="clb-${id}" checked="${state ? "checked" : ""}" style="display: none;">`;
-            setting.appendChild(checkbox);
-            category.appendChild(setting);
-
-            setting.onclick = function(e) {
-                var toggle = setting.getElementsByTagName("input")[0];
-                var newState = !toggle.checked;
-
-                e.stopPropagation();
-                setLocalSetting(id, newState);
-                toggle.checked = newState;
-                checkbox.setAttribute("class", `checkbox ${newState ? "on" : "off"}`);
-                onSettingChanged(id, newState);
-            };
-
-            onSettingChanged(id, state);
+        else {
+            return typeof defaultValue === "boolean" ? storedValue === "true" : storedValue;
         }
+    }
 
-        function setLocalSetting(setting, value) {
-            localStorage.setItem(account.account.uid + "-clb-" + setting, value);
-        }
-
-        function getLocalSetting(setting, defaultValue) {
-            var storedValue = localStorage.getItem(account.account.uid + "-clb-" + setting);
-
-            if(storedValue === null) {
-                setLocalSetting(setting, defaultValue);
-                return defaultValue;
-            }
-            else {
-                return typeof defaultValue === "boolean" ? storedValue === "true" : storedValue;
-            }
-        }
-
-        function onSettingChanged(id, state) { //trigger the ews-setting-changed event and update the lookup map with the new value
-            $(document).trigger('ews-setting-changed', {setting: id, state: state});
-        }
+    function onSettingChanged(id, state) { //trigger the ews-setting-changed event and update the lookup map with the new value
+        $(document).trigger('ews-setting-changed', {setting: id, state: state});
     }
 })();
