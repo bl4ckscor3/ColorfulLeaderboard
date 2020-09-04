@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3.4
+// @version      0.3.5
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -50,7 +50,6 @@
     });
 
     function main() {
-
         if(getLocalSetting(Settings.hideLeaderboard, false)) {
             $("#dismiss-leaderboard").click();
         }
@@ -60,6 +59,16 @@
 
     function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
         if(mutations.length === 0) {
+            return;
+        }
+
+        if(leaderboard.crew_id !== null) { //there's a competition being displayed, so only care about reordering flags
+            for(let i = 0; i < mutations.length; i++) {
+                if(mutations[i] && mutations[i].addedNodes.length !== 0) { //only care about mutations where a node has been added
+                    reorderFlag(mutations[i].addedNodes[0].childNodes[1]);
+                }
+            }
+
             return;
         }
 
