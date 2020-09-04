@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3.3
+// @version      0.3.4
 // @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -220,7 +220,7 @@
         modMentor.innerHTML = `<span style="color: #e4e1e1; font-style: italic; text-decoration: underline;">Moderator & Mentor</span>`;
 
         helpIcon.id = "leaderboard-help";
-        helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 2;");
+        helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 30000;");
         helpPanel.id = "helpPanel";
         helpPanel.style.position = "absolute";
         helpPanel.style.right = "-1000px";
