@@ -138,15 +138,8 @@
                         isMentor = true;
                     }
                 }
-                else {
-                    let level = data.level;
-
-                    if(level === 2) {
-                        highestRole = Roles.advancedPlayer;
-                    }
-                    else if(level === 1) {
-                        highestRole = Roles.player;
-                    }
+                else if(data.level === 2) {
+                    highestRole = Roles.advancedPlayer;
                 }
 
                 saveAndUpdatePlayer(nameSpan, name, {highestRole: highestRole, isMod: isMod, isMentor: isMentor});
