@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.3.5
-// @description  Colors users in their role's color on EyeWire's leaderboard and adds icons to indicate whether they're a moderator and/or mentor
+// @version      0.4
+// @description  Shows player role information on EyeWire's leaderboard and adds a couple QoL features
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
 // @grant        none
@@ -16,15 +16,16 @@
 (function() {
     'use strict';
 
-    const Colors = {
-        player: "#1de61d",
-        scout: "#95fbe4",
-        scythe: "#21a9ed",
-        mystic: "#ff6666",
-        admin: "#ffea49"
+    const Roles = {
+        player: "Player",
+        advancedPlayer: "Advanced Player",
+        scout: "Scout",
+        scythe: "Scythe",
+        mystic: "Mystic",
+        admin: "Admin"
     };
     const Settings = {
-        colorNames: "color-names",
+        showCrests: "show-crests",
         markModsMentors: "mark-mods-mentors",
         reorderFlags: "reorder-flags",
         hideLeaderboard: "hide-leaderboard"
@@ -38,7 +39,7 @@
         main();
     }, 100);
     const settingsCheck = setInterval(initSettings, 100);
-    //key: playername, value: {color, isMod, isMentor}
+    //key: playername, value: {highestRole, isMod, isMentor}
     const loadedPlayers = new Map();
     const leaderboardObserver = new MutationObserver(colorPlayers);
 
@@ -48,13 +49,13 @@
         characterData: false,
         subtree: false
     });
+    resizeLeaderboard();
+    resizeCubesPanel();
 
     function main() {
         if(getLocalSetting(Settings.hideLeaderboard, false)) {
             $("#dismiss-leaderboard").click();
         }
-
-        setupHelp();
     }
 
     function colorPlayers(mutations) { //the leaderboard mutates only when it is reloaded, so mutations only contains the leaderboard entries
@@ -107,7 +108,7 @@
         }
         else {
             $.getJSON(`/1.0/player/${name}/bio`, function(data) {
-                let color = Colors.player;
+                let highestRole = Roles.player;
                 let roles = data.roles;
                 let isMod = false;
                 let isMentor = false;
@@ -116,17 +117,17 @@
                     let isAdmin = false;
 
                     if(roles.includes("admin")) {
-                        color = Colors.admin;
+                        highestRole = Roles.admin;
                         isAdmin = true;
                     }
                     else if(roles.includes("mystic")) {
-                        color = Colors.mystic;
+                        highestRole = Roles.mystic;
                     }
                     else if(roles.includes("scythe")) {
-                        color = Colors.scythe;
+                        highestRole = Roles.scythe;
                     }
                     else if(roles.includes("scout")) {
-                        color = Colors.scout;
+                        highestRole = Roles.scout;
                     }
 
                     if(roles.includes("moderator") || isAdmin) { //always mark admins as moderators
@@ -137,11 +138,21 @@
                         isMentor = true;
                     }
                 }
+                else {
+                    let level = data.level;
 
-                saveAndUpdatePlayer(nameSpan, name, {color: color, isMod: isMod, isMentor: isMentor});
+                    if(level === 2) {
+                        highestRole = Roles.advancedPlayer;
+                    }
+                    else if(level === 1) {
+                        highestRole = Roles.player;
+                    }
+                }
+
+                saveAndUpdatePlayer(nameSpan, name, {highestRole: highestRole, isMod: isMod, isMentor: isMentor});
             }).fail(function() {
-                console.warn(`Failed to color ${name} in the leaderboard, falling back to default player color.`);
-                saveAndUpdatePlayer(nameSpan, name, {color: Colors.player, isMod: false, isMentor: false});
+                console.warn(`Failed to color ${name} in the leaderboard, falling back to level 1 player.`);
+                saveAndUpdatePlayer(nameSpan, name, {highestRole: Roles.player, isMod: false, isMentor: false});
             });
         }
     }
@@ -152,14 +163,40 @@
     }
 
     function updatePlayer(element, data) {
-        updatePlayerColor(element, data.color);
+        updatePlayerIcon(element, data);
         updatePlayerInfo(element, data.isMod, data.isMentor);
         reorderFlag(element);
     }
 
-    function updatePlayerColor(element, color) {
-        if(getLocalSetting(Settings.colorNames, true) && leaderboard.competition_id === null) { //do not color names during competitions
-            element.getElementsByTagName("span")[0].style.color = color;
+    function updatePlayerIcon(element, data) {
+        if(getLocalSetting(Settings.showCrests, true) && leaderboard.competition_id === null) { //do not add role icons during competitions
+            let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
+            let crestElem = document.createElement("img");
+            let flagCrestSpan = document.createElement("span");
+
+            if(flagImg) {
+                element.childNodes[1].remove(); //remove the old flag
+                flagCrestSpan.appendChild(flagImg);
+            }
+
+            crestElem.src = getCrestImage(data.highestRole);
+            crestElem.width = 15;
+            crestElem.height = 15;
+            crestElem.title = data.highestRole;
+
+            if(data.isMod && data.isMentor) {
+                crestElem.title += ", Moderator, & Mentor";
+            }
+            else if(data.isMod) {
+                crestElem.title += " & Moderator";
+            }
+            else if(data.isMentor) {
+                crestElem.title += " & Mentor";
+            }
+
+            crestElem.setAttribute("class", "playerRoleCrest");
+            flagCrestSpan.appendChild(crestElem);
+            element.appendChild(flagCrestSpan);
         }
     }
 
@@ -182,14 +219,21 @@
 
     function reorderFlag(element) {
         if(element && getLocalSetting(Settings.reorderFlags, true)) {
-            let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode() : null; //not all users have a flag set
+            let flagImg = element.childNodes[1] ? element.childNodes[1].cloneNode(true) : null; //not all users have a flag set
             let noLeftMargin = "margin-left: 0px;";
 
             if(flagImg) {
                 element.childNodes[1].remove();
                 flagImg.setAttribute("style", noLeftMargin + "margin-right: 5px");
+
+                if(flagImg.childNodes.length === 1) { //for displaying the crests at the correct position even if the player has no flag set
+                    let placeholder = document.createElement("span");
+
+                    placeholder.setAttribute("style", noLeftMargin + "margin-right: 21px");
+                    flagImg.prepend(placeholder);
+                }
             }
-            else{
+            else {
                 flagImg = document.createElement("span"); //placeholder
                 flagImg.setAttribute("style", noLeftMargin + "margin-right: 21px");
             }
@@ -198,63 +242,70 @@
         }
     }
 
-    function setupHelp() {
-        let helpIcon = document.createElement("div");
-        let helpPanel = document.createElement("div");
-        let container = document.createElement("div");
-        let player = document.createElement("div");
-        let scout = document.createElement("div");
-        let scythe = document.createElement("div");
-        let mystic = document.createElement("div");
-        let admin = document.createElement("div");
-        let mod = document.createElement("div");
-        let mentor = document.createElement("div");
-        let modMentor = document.createElement("div");
-        let helpStyle = document.createElement("style");
+    function resizeLeaderboard() {
+        const widerLeaderboardStyle = document.createElement("style");
+        const usernameColumnWidth = ".leaderRowHeader span:nth-child(2), .leaderRow span:nth-child(2) {width: 160px;}"; //increases username column width
+        const wideLeaderboard = ".ovlbContainer {width: 310px;}"; //increases leaderboard width
+        const normalLeaderboard = ".ovlbContainer {width: 280px;}"; //default leaderboard width
 
-        helpStyle.id = "leaderboard-help-style";
-        helpStyle.type = "text/css"
-        helpStyle.innerHTML = "#helpPanel {background-color: rgba(29, 29, 32, 0.8); border-radius: 8px; z-index: 30000;}";
-        document.head.appendChild(helpStyle);
+        widerLeaderboardStyle.setAttribute("id", "widerLeaderboard");
+        widerLeaderboardStyle.innerHTML = usernameColumnWidth + wideLeaderboard;
+        document.head.appendChild(widerLeaderboardStyle);
 
-        container.id = "helpContainer";
-        container.setAttribute("style", "margin: 10px; font-size: 13px");
-        player.innerHTML = `<span style="color: ${Colors.player};">(Advanced) Player</span>`;
-        scout.innerHTML = `<span style="color: ${Colors.scout};">Scout</span>`;
-        scythe.innerHTML = `<span style="color: ${Colors.scythe};">Scythe</span>`;
-        mystic.innerHTML = `<span style="color: ${Colors.mystic};">Mystic</span>`;
-        admin.innerHTML = `<span style="color: ${Colors.admin};">Admin</span>`;
-        mod.innerHTML = `<span style="color: #e4e1e1; font-style: italic;">Moderator</span>`;
-        mentor.innerHTML = `<span style="color: #e4e1e1; text-decoration: underline;">Mentor</span>`;
-        modMentor.innerHTML = `<span style="color: #e4e1e1; font-style: italic; text-decoration: underline;">Moderator & Mentor</span>`;
+        //fixes the leaderboard not completely disappearing off the screen when dismissed
+        document.getElementById("dismiss-leaderboard").onclick = function() {
+            widerLeaderboardStyle.innerHTML = usernameColumnWidth + normalLeaderboard;
+        }
+        document.getElementById("recall-leaderboard").onclick = function() {
+            widerLeaderboardStyle.innerHTML = usernameColumnWidth + wideLeaderboard;
+        }
+    }
 
-        helpIcon.id = "leaderboard-help";
-        helpIcon.setAttribute("style", "background-image: url(https://eyewire.org/static/images/ui/Help.svg); width: 25px; height: 25px; position: absolute; z-index: 30000;");
-        helpPanel.id = "helpPanel";
-        helpPanel.style.position = "absolute";
-        helpPanel.style.right = "-1000px";
-        helpPanel.style.width = "175px";
-        helpPanel.style.height = "175px";
+    function resizeCubesPanel() {
+        const playerAddons = JSON.parse(localStorage.getItem("playerAddons")); //used to check if the cubes addon is enabled so its display can be widened as well
 
-        helpIcon.onmouseenter = function() {
-            helpPanel.style.right = "0px";
-        };
+        if(playerAddons) {
+            for(let addon of playerAddons) {
+                if(addon.name === "Cubes") {
+                    const interval = setInterval(function() {
+                        let cubesPanel = document.getElementById("ews-cubes-panel");
 
-        helpPanel.onmouseleave = function() {
-            helpPanel.style.right = "-1000px";
-        };
+                        if(cubesPanel) {
+                            clearInterval(interval);
+                            cubesPanel.style.width = "310px"; //make the cubes panel the same width as the leaderboard
 
-        container.appendChild(player);
-        container.appendChild(scout);
-        container.appendChild(scythe);
-        container.appendChild(mystic);
-        container.appendChild(admin);
-        container.appendChild(mod);
-        container.appendChild(mentor);
-        container.appendChild(modMentor);
-        helpPanel.appendChild(container);
-        helpIcon.appendChild(helpPanel);
-        document.getElementById("ovlbContainer").prepend(helpIcon);
+                            for(let tab of cubesPanel.getElementsByClassName("ews-cubes-tab")) {
+                                tab.setAttribute("style", "margin-left: 6px"); //add more space between the tab buttons so they fill the whole width of the panel
+                            }
+                        }
+                    }, 100);
+
+                    return;
+                }
+            }
+        }
+    }
+
+    //TODO: change these should the script be added officially
+    function getCrestImage(role) {
+        if(role === Roles.player) {
+            return "https://i.imgur.com/CQkMiRN.png";//img/player.png";
+        }
+        else if(role === Roles.advancedPlayer) {
+            return "https://i.imgur.com/NksbcD6.png";//img/advanced_player.png";
+        }
+        else if(role === Roles.scout) {
+            return "https://i.imgur.com/nzsN4Ak.png";//img/scout.png";
+        }
+        else if(role === Roles.scythe) {
+            return "https://i.imgur.com/71YeMfH.png";//img/scythe.png";
+        }
+        else if(role === Roles.mystic) {
+            return "https://i.imgur.com/Xnd97Nw.png";//img/mystic.png";
+        }
+        else if(role === Roles.admin) {
+            return "https://i.imgur.com/DiF3AUg.png";//img/admin.png";
+        }
     }
 
     function initSettings() {
@@ -270,9 +321,9 @@
         category.setAttribute("class", "settings-group ews-settings-group invisible");
         category.innerHTML = '<h1>Leaderboard</h1>';
         menu.appendChild(category);
-        addToggleSetting(category, Settings.colorNames, "Color players in their highest rank's color", true);
+        addToggleSetting(category, Settings.showCrests, "Show crests colored in players' highest rank's color", true);
         addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
-        addToggleSetting(category, Settings.reorderFlags, "Show flags in front of players' names", true);
+        addToggleSetting(category, Settings.reorderFlags, "Show flags and icons in front of players' names", true);
         addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
     }
 
