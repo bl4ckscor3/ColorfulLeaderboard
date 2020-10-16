@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Colorful Leaderboard
 // @namespace    bl4ckscor3
-// @version      0.4
+// @version      0.4.1
 // @description  Shows player role information on EyeWire's leaderboard and adds a couple QoL features
 // @author       bl4ckscor3
 // @match        https://eyewire.org/
@@ -315,7 +315,7 @@
         category.innerHTML = '<h1>Leaderboard</h1>';
         menu.appendChild(category);
         addToggleSetting(category, Settings.showCrests, "Show crests colored in players' highest rank's color", true);
-        addToggleSetting(category, Settings.markModsMentors, "Mark moderators and mentors", true);
+        addToggleSetting(category, Settings.markModsMentors, "Mark moderators (italics) and mentors (underline)", false);
         addToggleSetting(category, Settings.reorderFlags, "Show flags and icons in front of players' names", true);
         addToggleSetting(category, Settings.hideLeaderboard, "Hide the leaderboard by default in the overview", false);
     }
