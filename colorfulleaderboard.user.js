@@ -194,7 +194,7 @@
     }
 
     function updatePlayerInfo(element, isMod, isMentor) {
-        if(getLocalSetting(Settings.markModsMentors, true) && leaderboard.competition_id === null) { //do not style names during competitions
+        if(getLocalSetting(Settings.markModsMentors, false) && leaderboard.competition_id === null) { //do not style names during competitions
             //mark the name italics and underline for mod/mentor
             var textStyle = `color: ${element.childNodes[0].style.color};`;
 
